@@ -1,0 +1,190 @@
+
+Game 1:
+*the computer picks a random number from 1-10
+*the user must guess it by clicking the button
+*if the guess is too high, it will flash three times
+*if the guess is too low, it will flash two times 
+*if the guess is correct, it will flash 20 times
+
+By clicking the outlet button and pressing the start
+button on the microcontroller, you can find out the number
+that we are trying to guess because it prints to the console!
+
+/////////////////////
+//Here is the game//
+///////////////////
+
+#include "stm32f4xx_hal.h"
+#include <stdbool.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <time.h>
+
+#include "guess.h"
+
+#define LED_GPIO_PORT GPIOA
+#define LED_PIN GPIO_PIN_5
+
+#define BUTTON_GPIO_PORT GPIOC
+#define BUTTON_PIN GPIO_PIN_13
+
+//these functions make the LED blink
+void start_game();
+void incorrect_high();
+void incorrect_low();
+void win();
+
+//records the user's guess (their number)
+int count_clicks();
+
+//use to control how long a toggle will last before switching
+void delay(int time);
+
+//get the computer's number 
+int get_random (int time);
+
+int main();
+
+///////////////////////////
+//FUNCTION DECLARATIONS //
+/////////////////////////
+
+void start_game () {
+    for(int i = 0 ; i < 40; i++){
+        HAL_GPIO_TogglePin(LED_GPIO_PORT, LED_PIN);
+        HAL_Delay(50); 
+    }
+}
+
+void incorrect_high () {
+    for(int i = 0 ; i < 6; i++){
+        HAL_GPIO_TogglePin(LED_GPIO_PORT, LED_PIN);
+        HAL_Delay(120); 
+    }
+    delay(1000);
+}
+
+void incorrect_low () {
+    for(int i = 0 ; i < 4; i++){
+        HAL_GPIO_TogglePin(LED_GPIO_PORT, LED_PIN);
+        HAL_Delay(120); 
+    }
+    delay(1000);
+}
+
+void win(){
+    for(int i = 0 ; i < 40; i++){
+        HAL_GPIO_TogglePin(LED_GPIO_PORT, LED_PIN);
+        HAL_Delay(50); 
+    }
+}
+
+//function to count clicks when the button is clicked
+int count_clicks(){
+    //start the amount of clicks at 0
+    int counter = 0;
+    //store the current time
+    int time_click = HAL_GetTick();
+
+    while (true){
+        //while the button is not clicked
+        while(HAL_GPIO_ReadPin(GPIOC, BUTTON_PIN)){
+            //while true, the button has not been pressed
+            //if it's pressed, we exit out of the inside while loop
+            //check if the time since the last click is over 1.5s
+            if((HAL_GetTick() - time_click) > 1500){
+                // HAL_GetTick() is the time since the start
+                //time_click is the time since you last clicked the button
+                //return the amount of clicks
+                return counter;
+            }
+        }
+        //once the button is clicked, increase the amount of clicks
+        counter++;
+        //set the time that the button is clicked
+        time_click = HAL_GetTick();
+        //wait until the button is not clicked
+        while(!HAL_GPIO_ReadPin(GPIOC, BUTTON_PIN));
+        
+    }
+
+}
+
+void delay(int time){
+    //function to delay (used for on/off for morse code)
+    //use instead of normal delay function so it can be broken if the button is clicked
+    int counter = 0;
+    
+    //repeat until the delay is finished (counter = time) or the button is clicked
+    while(counter < time && HAL_GPIO_ReadPin(GPIOC, BUTTON_PIN)){
+        //increase counter by one and delay 1 ms
+        counter+=1;
+        HAL_Delay(1);
+    }
+}
+
+void SysTick_Handler(void)
+{
+    HAL_IncTick();
+    //every millisecond increases the code by one tick to check the time since the program began
+}
+
+
+int get_random (int time) {
+    //the computer picks a random number from 1-10
+    srand(time);
+    
+    int max = 10;
+
+    int random_number = (rand() % max);
+
+    if (random_number == 0) {
+        get_random(HAL_GetTick());
+    }
+
+    return random_number;
+}
+
+int main () {
+    HAL_Init();
+
+    SerialSetup(9600);
+
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    __HAL_RCC_GPIOC_CLK_ENABLE();
+
+    GPIO_InitTypeDef GPIO_InitStruct;
+
+    GPIO_InitStruct.Pin = LED_PIN;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+
+    HAL_GPIO_Init(LED_GPIO_PORT, &GPIO_InitStruct);
+    HAL_GPIO_WritePin(LED_GPIO_PORT, LED_PIN, GPIO_PIN_RESET);
+
+    //try with just one if it bugs
+    while(HAL_GPIO_ReadPin(GPIOC, BUTTON_PIN));
+    while(HAL_GPIO_ReadPin(GPIOC, BUTTON_PIN));
+
+    start_game();
+
+    int clicks;
+    int random_number = get_random (HAL_GetTick());
+    char buff[100];
+    sprintf(buff, "Time: %lu ms   Random = %d\r\n", HAL_GetTick(), random_number);
+    SerialPuts(buff);
+
+    while (true) {
+        clicks = count_clicks();
+        if (clicks == random_number) {
+            win();
+        } else if (clicks > random_number) {
+            incorrect_high();
+        } else if ((clicks < random_number) && (clicks > 0)) {
+            incorrect_low();
+        }
+
+    }
+
+    return 0;
+}
